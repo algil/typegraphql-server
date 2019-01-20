@@ -1,18 +1,22 @@
 import 'reflect-metadata';
 import { ApolloServer } from 'apollo-server-express';
 import express from 'express';
+import expressJwt from 'express-jwt';
 import {
   buildSchema,
   Resolver,
   Query,
-  formatArgumentValidationError
+  formatArgumentValidationError,
+  Authorized
 } from 'type-graphql';
 import { createConnection } from 'typeorm';
-import { UserResolver } from './modules/user/user.resolver';
+import { AuthResolver } from './modules/auth/auth.resolver';
+import config from './config';
 
 @Resolver()
 class HelloResolver {
   @Query(() => String)
+  @Authorized()
   async hello() {
     return 'Hello world';
   }
@@ -22,13 +26,22 @@ const main = async () => {
   await createConnection();
 
   const schema = await buildSchema({
-    resolvers: [HelloResolver, UserResolver]
+    resolvers: [HelloResolver, AuthResolver],
+    authChecker: ({ context }) => !!context.req.user
   });
   const apolloServer = new ApolloServer({
     schema,
-    formatError: formatArgumentValidationError
+    formatError: formatArgumentValidationError,
+    context: ({ req }: any) => ({ req })
   });
   const app = express();
+
+  app.use(
+    expressJwt({
+      secret: config.jwtSecret as string,
+      credentialsRequired: false
+    })
+  );
 
   apolloServer.applyMiddleware({ app });
 
